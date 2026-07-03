@@ -1,0 +1,38 @@
+parameter_id: transmission_charge
+display_name: "Transmission Charge"
+sheet_name: "Transmission Charge"
+parser_id: numeric_matrix_v1
+parser_family: numeric_matrix
+force_pattern: numeric_matrix
+
+table_structure:
+  state_location: column
+  header_rows: 2
+  state_column: 0
+
+output_schema:
+  columns:
+    - state
+    - utility
+    - year
+    - long_medium_charge
+    - long_medium_unit
+    - short_term_charge
+    - short_term_unit
+
+validation:
+  min_records: 20
+  max_warnings: 10
+
+export:
+  column_display_names:
+    state: "State/UT"
+    utility: "Distribution Utility"
+    year: "Financial Year"
+    long_medium_charge: "Long/Medium Term Charge"
+    long_medium_unit: "Long/Medium Term Unit"
+    short_term_charge: "Short Term Charge"
+    short_term_unit: "Short Term Unit"
+    confidence: "Confidence"
+    source_pages: "Source Pages"
+  exclude_columns: [record_id, parameter_id]

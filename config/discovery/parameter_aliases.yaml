@@ -1,0 +1,15 @@
+# Natural-language aliases for parameter discovery
+aliases:
+  banking_charges:
+    - "banking charges"
+    - "banking charge"
+  transmission_charge:
+    - "transmission charge"
+    - "transmission charges"
+  wheeling_charge:
+    - "wheeling charge"
+    - "wheeling charges"
+  additional_surcharge:
+    - "additional surcharge"
+  cross_subsidy_surcharge:
+    - "cross subsidy surcharge"

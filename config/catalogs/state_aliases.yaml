@@ -1,0 +1,20 @@
+# State name alias mappings
+aliases:
+  Orissa: Odisha
+  "J&K": "Jammu and Kashmir"
+  JandK: "Jammu and Kashmir"
+  "NCT of Delhi": Delhi
+  AP: Andhra Pradesh
+  HP: Himachal Pradesh
+  MP: Madhya Pradesh
+  UP: Uttar Pradesh
+  UK: Uttarakhand
+  WB: West Bengal
+  TN: Tamil Nadu
+  "A&NI": "Andaman & Nicobar Islands"
+  "Andaman and Nicobar Islands": "Andaman & Nicobar Islands"
+  "DNH&DD": "Dadra & Nagar Haveli and Daman & Diu"
+  "Dadra and Nagar Haveli and Daman and Diu": "Dadra & Nagar Haveli and Daman & Diu"
+  Pondicherry: Puducherry
+  Uttaranchal: Uttarakhand
+

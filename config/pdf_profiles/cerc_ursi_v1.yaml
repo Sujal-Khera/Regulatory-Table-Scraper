@@ -1,0 +1,10 @@
+# CERC URSI regulatory report profile (v1)
+profile_id: cerc_ursi_v1
+display_name: "CERC URSI Compliance Report"
+
+supported_parameters:
+  - banking_charges
+  - transmission_charge
+  - wheeling_charge
+  - additional_surcharge
+  - cross_subsidy_surcharge

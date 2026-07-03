@@ -1,0 +1,64 @@
+# Consumer categories catalog
+categories:
+  Industrial:
+    aliases:
+      - "industry"
+      - "industries"
+      - "ind"
+      - "ht industrial"
+      - "lt industrial"
+      - "large industrial"
+      - "medium industrial"
+      - "small industrial"
+      - "industrial consumers"
+    subcategories:
+      - HT Industrial
+      - LT Industrial
+      - Small Industrial
+      - Medium Industrial
+      - Large Industrial
+  Commercial:
+    aliases:
+      - "non-domestic"
+      - "commercial consumers"
+      - "comm"
+      - "shop"
+      - "shops"
+  Domestic:
+    aliases:
+      - "residential"
+      - "household"
+      - "dom"
+  Agriculture:
+    aliases:
+      - "irrigation"
+      - "agri"
+      - "agricultural"
+      - "pump sets"
+  Railway Traction:
+    aliases:
+      - "railways"
+      - "traction"
+      - "metro"
+  Mining:
+    aliases:
+      - "mines"
+      - "collieries"
+  Bulk Supply:
+    aliases:
+      - "mixed load"
+      - "bulk"
+  Temporary:
+    aliases:
+      - "temp"
+      - "temporary supply"
+  Public Lighting:
+    aliases:
+      - "street light"
+      - "street lights"
+      - "public light"
+  Water Works:
+    aliases:
+      - "public water works"
+      - "sewage treatment"
+      - "pww"

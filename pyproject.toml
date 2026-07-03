@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "table-scraper"
+version = "0.1.0"
+description = "Regulatory PDF table extraction pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "pdfplumber",
+    "tqdm",
+    "openpyxl",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+table-scraper = "table_scraper.interfaces.cli.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

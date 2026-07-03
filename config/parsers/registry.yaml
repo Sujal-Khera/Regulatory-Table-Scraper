@@ -1,0 +1,32 @@
+# Parser plugin registry
+parsers:
+  narrative_v1:
+    family: narrative
+    patterns: [hierarchical_parent_child, continuation_rows]
+  numeric_matrix_v1:
+    family: numeric_matrix
+    patterns: [numeric_matrix]
+  wide_to_long_v1:
+    family: wide_to_long
+    patterns: [wide_table]
+  state_block_matrix_v1:
+    family: state_block_matrix
+    patterns: [state_block_matrix]
+  simple_matrix_v1:
+    family: simple_matrix
+    patterns: [simple_matrix]
+  key_value_v1:
+    family: key_value
+    patterns: [key_value]
+
+parameters:
+  banking_charges:
+    parser_id: narrative_v1
+  transmission_charge:
+    parser_id: numeric_matrix_v1
+  wheeling_charge:
+    parser_id: wide_to_long_v1
+  additional_surcharge:
+    parser_id: numeric_matrix_v1
+  cross_subsidy_surcharge:
+    parser_id: state_block_matrix_v1

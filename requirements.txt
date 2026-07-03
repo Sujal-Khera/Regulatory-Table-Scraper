@@ -1,0 +1,8 @@
+numpy
+pandas
+pdfplumber
+tqdm
+openpyxl
+PyYAML
+pdfminer.six
+typing_extensions

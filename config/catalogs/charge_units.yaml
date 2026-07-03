@@ -1,0 +1,34 @@
+# Charge units catalog
+units:
+  Rs/kWh:
+    aliases:
+      - "rs/kwh"
+      - "rs. / kwh"
+      - "rs./kwh"
+      - "paise/kwh"
+      - "p/kwh"
+      - "₹/kwh"
+  Rs/kW/month:
+    aliases:
+      - "rs/kw/month"
+      - "rs/kw/m"
+      - "rs/kw/mon"
+      - "rs. / kw / month"
+      - "₹/kw/month"
+  Rs/kVA/month:
+    aliases:
+      - "rs/kva/month"
+      - "rs/kva/m"
+      - "rs/kva/mon"
+      - "rs. / kva / month"
+      - "₹/kva/month"
+  Rs/MW/day:
+    aliases:
+      - "rs/mw/day"
+      - "rs/mw/d"
+      - "₹/mw/day"
+  "%":
+    aliases:
+      - "percent"
+      - "percentage"
+      - "pct"

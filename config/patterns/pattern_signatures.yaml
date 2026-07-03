@@ -1,0 +1,13 @@
+# Pattern classifier feature weights
+signatures:
+  numeric_matrix:
+    numeric_header: 0.8
+    year_column: 0.7
+  wide_table:
+    voltage_keywords: 0.9
+  state_block_matrix:
+    category_header: 0.9
+    section_rows: 0.7
+  hierarchical_parent_child:
+    discom_density: 0.8
+    policy_text: 0.6

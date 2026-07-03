@@ -1,0 +1,34 @@
+parameter_id: cross_subsidy_surcharge
+display_name: "Cross Subsidy Surcharge"
+sheet_name: "Cross Subsidy Surcharge"
+parser_id: state_block_matrix_v1
+parser_family: state_block_matrix
+force_pattern: state_block_matrix
+
+table_structure:
+  state_location: spanning
+  header_rows: 0
+  state_column: 1
+  header_keywords: ["category"]
+
+output_schema:
+  columns: [state, category, utility, value]
+
+validation:
+  min_records: 50
+  max_warnings: 10
+
+export:
+  column_display_names:
+    state: "State/UT"
+    utility: "Distribution Utility"
+    consumer_category: "Consumer Category"
+    consumer_subcategory: "Consumer Sub-Category"
+    charge_value: "Cross Subsidy Surcharge (Rs/kWh)"
+    charge_unit: "Unit"
+    voltage_level: "Voltage Level"
+    year_label: "Financial Year"
+    effective_date: "Effective Date"
+    confidence: "Confidence"
+    source_pages: "Source Pages"
+  exclude_columns: [record_id, parameter_id]

@@ -1,0 +1,28 @@
+# Voltage levels catalog
+voltages:
+  LT:
+    aliases:
+      - "low tension"
+      - "lt"
+      - "low voltage"
+      - "single phase"
+      - "three phase"
+  HT:
+    aliases:
+      - "high tension"
+      - "ht"
+      - "medium voltage"
+      - "11 kv"
+      - "22 kv"
+      - "33 kv"
+  EHT:
+    aliases:
+      - "extra high tension"
+      - "eht"
+      - "extra high voltage"
+      - "ehv"
+      - "66 kv"
+      - "110 kv"
+      - "132 kv"
+      - "220 kv"
+      - "400 kv"

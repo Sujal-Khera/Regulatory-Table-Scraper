@@ -1,0 +1,4 @@
+# TOC and table title regex patterns
+table_title_pattern: 'TABLE[- ]?\d+(?:\([A-Z]\))?\s*:\s*([^\n]+)'
+
+toc_entry_pattern: 'TABLE[- ]?\d+(?:\([A-Z]\))?\s*:\s*(.*?)\s+(\d+)'

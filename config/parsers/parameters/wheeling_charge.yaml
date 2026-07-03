@@ -1,0 +1,29 @@
+parameter_id: wheeling_charge
+display_name: "Wheeling Charge"
+sheet_name: "Wheeling Charge"
+parser_id: wide_to_long_v1
+parser_family: wide_to_long
+force_pattern: wide_table
+
+table_structure:
+  state_location: column
+  header_rows: 3
+  state_column: 0
+
+output_schema:
+  columns: [state, utility, year, voltage_level, wheeling_charge]
+
+validation:
+  min_records: 20
+  max_warnings: 10
+
+export:
+  column_display_names:
+    state: "State/UT"
+    utility: "Distribution Utility"
+    year: "Financial Year"
+    voltage_level: "Voltage Level"
+    wheeling_charge: "Wheeling Charge (Rs/kWh)"
+    confidence: "Confidence"
+    source_pages: "Source Pages"
+  exclude_columns: [record_id, parameter_id]

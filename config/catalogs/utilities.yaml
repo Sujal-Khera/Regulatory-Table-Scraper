@@ -1,0 +1,110 @@
+# Utility/DISCOM registry — comprehensive seed catalog
+utilities:
+  Andhra Pradesh:
+    - APEPDCL
+    - APSPDCL
+    - APCPDCL
+  Arunachal Pradesh:
+    - DoP Arunachal
+  Assam:
+    - APDCL
+  Bihar:
+    - NBPDCL
+    - SBPDCL
+  Chhattisgarh:
+    - CSPDCL
+  Delhi:
+    - BRPL
+    - BYPL
+    - TPDDL
+    - NDMC
+    - MES
+  Goa:
+    - Goa ED
+  Gujarat:
+    - DGVCL
+    - MGVCL
+    - PGVCL
+    - UGVCL
+    - Torrent Power
+  Haryana:
+    - UHBVN
+    - DHBVN
+  Himachal Pradesh:
+    - HPSEBL
+  Jammu and Kashmir:
+    - JPDCL
+    - KPDCL
+  Jharkhand:
+    - JBVNL
+    - JUSCO
+  Karnataka:
+    - BESCOM
+    - MESCOM
+    - HESCOM
+    - GESCOM
+    - CESC
+  Kerala:
+    - KSEBL
+  Madhya Pradesh:
+    - MPWZ
+    - MPMZ
+    - MPPKVVCL
+  Maharashtra:
+    - MSEDCL
+    - BEST
+    - Adani Electricity
+    - Tata Power
+  Manipur:
+    - MSPDCL
+  Meghalaya:
+    - MePDCL
+  Mizoram:
+    - P&ED Mizoram
+  Nagaland:
+    - DoP Nagaland
+  Odisha:
+    - TPCODL
+    - TPNODL
+    - TPSODL
+    - TPWODL
+  Punjab:
+    - PSPCL
+  Rajasthan:
+    - JVVNL
+    - AVVNL
+    - JdVVNL
+  Sikkim:
+    - DoP Sikkim
+  Tamil Nadu:
+    - TANGEDCO
+  Telangana:
+    - TSSPDCL
+    - TSNPDCL
+  Tripura:
+    - TSECL
+  Uttar Pradesh:
+    - DVVNL
+    - MVVNL
+    - PVVNL
+    - PuVVNL
+    - KESCO
+    - NPCL
+  Uttarakhand:
+    - UPCL
+  West Bengal:
+    - WBSEDCL
+    - CESC
+  Puducherry:
+    - Puducherry ED
+  Andaman & Nicobar Islands:
+    - A&N Electricity Department
+  Chandigarh:
+    - Chandigarh ED
+  Dadra & Nagar Haveli and Daman & Diu:
+    - DNHPDCL
+    - DDED
+  Lakshadweep:
+    - Lakshadweep ED
+  Ladakh:
+    - PDD Ladakh

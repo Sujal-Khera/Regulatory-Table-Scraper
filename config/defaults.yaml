@@ -1,0 +1,17 @@
+# Global pipeline defaults
+schema_version: "1.0.0"
+
+toc_max_pages: 15
+page_range_strategy: anchor_chain
+table_selector: largest_area
+pattern_confidence_threshold: 0.7
+
+export:
+  max_column_width: 60
+  freeze_panes: true
+  bold_headers: true
+
+workspace:
+  root: workspaces
+
+debug: false

@@ -1,0 +1,30 @@
+parameter_id: banking_charges
+display_name: "Banking Charges"
+sheet_name: "Banking Charges"
+parser_id: narrative_v1
+parser_family: narrative
+force_pattern: hierarchical_parent_child
+calibration_phrase: "Banking Charges"
+
+table_structure:
+  state_location: column
+  header_rows: 1
+  state_column: 0
+
+output_schema:
+  columns: [state, discom, charge, period, policy]
+
+validation:
+  min_records: 20
+  max_warnings: 10
+
+export:
+  column_display_names:
+    state: "State/UT"
+    discom: "Distribution Utility"
+    charge: "Banking Charge"
+    period: "Banking Period"
+    policy: "Banking Policy"
+    confidence: "Confidence"
+    source_pages: "Source Pages"
+  exclude_columns: [record_id, parameter_id]
