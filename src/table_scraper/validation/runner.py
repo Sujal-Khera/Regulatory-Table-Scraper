@@ -107,10 +107,11 @@ def validate_parse_result(result: ParseResult, parameter_config: Any) -> Validat
         from table_scraper.config.loader import get_config_loader
         loader = get_config_loader()
         param_yaml = loader._load_yaml(f"parsers/parameters/{result.parameter_id}.yaml")
-        if isinstance(param_yaml, dict) and "output_schema" in param_yaml:
-            out_schema = param_yaml["output_schema"]
-            if isinstance(out_schema, dict) and "columns" in out_schema:
-                required = list(out_schema["columns"])
+        if isinstance(param_yaml, dict):
+            if "validation" in param_yaml and isinstance(param_yaml["validation"], dict) and "required_fields" in param_yaml["validation"]:
+                required = list(param_yaml["validation"]["required_fields"])
+            elif "output_schema" in param_yaml and isinstance(param_yaml["output_schema"], dict) and "columns" in param_yaml["output_schema"]:
+                required = list(param_yaml["output_schema"]["columns"])
     except Exception:
         pass
 
@@ -139,7 +140,7 @@ def validate_parse_result(result: ParseResult, parameter_config: Any) -> Validat
     checks.append(
         ValidationCheck(
             rule_id="required_fields",
-            severity=ValidationSeverity.WARNING,
+            severity=ValidationSeverity.ERROR,
             passed=(total_missing == 0),
             message=f"Missing required fields: {missing_counts}" if total_missing > 0 else "All required fields are populated.",
             details={"missing_counts": missing_counts},
@@ -165,6 +166,46 @@ def validate_parse_result(result: ParseResult, parameter_config: Any) -> Validat
         )
     )
 
+    # 2.5 Composite Key Duplicate Detection (Severity: WARNING by default)
+    composite_severity = ValidationSeverity.WARNING
+    try:
+        from table_scraper.config.loader import get_config_loader
+        loader = get_config_loader()
+        param_yaml = loader._load_yaml(f"parsers/parameters/{result.parameter_id}.yaml")
+        if isinstance(param_yaml, dict) and "validation" in param_yaml:
+            val_cfg = param_yaml["validation"]
+            if isinstance(val_cfg, dict) and "composite_duplication_severity" in val_cfg:
+                composite_severity = ValidationSeverity(val_cfg["composite_duplication_severity"])
+    except Exception:
+        pass
+
+    composite_keys = ["state", "utility", "discom", "year", "voltage_level", "consumer_category"]
+    seen_composite = {}
+    composite_duplicates = []
+    
+    for record in result.records:
+        key_parts = []
+        for k in composite_keys:
+            if k in record.fields:
+                val = record.fields[k]
+                key_parts.append(f"{k}:{str(val).strip().lower()}")
+        if key_parts:
+            key_tuple = tuple(key_parts)
+            if key_tuple in seen_composite:
+                composite_duplicates.append(record.record_id)
+            else:
+                seen_composite[key_tuple] = record.record_id
+
+    checks.append(
+        ValidationCheck(
+            rule_id="composite_duplication",
+            severity=composite_severity,
+            passed=(len(composite_duplicates) == 0),
+            message=f"Discovered {len(composite_duplicates)} composite key duplicates." if composite_duplicates else "No composite key duplicates detected.",
+            details={"duplicate_ids": composite_duplicates},
+        )
+    )
+
     # 3. State Name Validation (Severity: WARNING)
     invalid_states = []
     for record in result.records:
@@ -177,7 +218,7 @@ def validate_parse_result(result: ParseResult, parameter_config: Any) -> Validat
     checks.append(
         ValidationCheck(
             rule_id="state_validation",
-            severity=ValidationSeverity.WARNING,
+            severity=ValidationSeverity.ERROR,
             passed=(len(invalid_states) == 0),
             message=f"Found {len(invalid_states)} records with invalid state names." if invalid_states else "All state names are canonical.",
             details={"invalid_states": list(set(invalid_states))},
@@ -271,12 +312,24 @@ def validate_parse_result(result: ParseResult, parameter_config: Any) -> Validat
         )
     )
     
+    value_null_limit = 0.20
+    try:
+        from table_scraper.config.loader import get_config_loader
+        loader = get_config_loader()
+        param_yaml = loader._load_yaml(f"parsers/parameters/{result.parameter_id}.yaml")
+        if isinstance(param_yaml, dict) and "validation" in param_yaml:
+            val_cfg = param_yaml["validation"]
+            if isinstance(val_cfg, dict):
+                value_null_limit = float(val_cfg.get("max_null_rate", value_null_limit))
+    except Exception:
+        pass
+
     checks.append(
         ValidationCheck(
             rule_id="value_null_rate",
             severity=ValidationSeverity.ERROR,
-            passed=(value_null_rate <= 0.20),
-            message=f"Value fields null rate is {value_null_rate:.2%} (limit is 20.00%).",
+            passed=(value_null_rate <= value_null_limit),
+            message=f"Value fields null rate is {value_null_rate:.2%} (limit is {value_null_limit:.2%}).",
             details={"null_count": value_null_count, "total_checked": total_value_fields_checked, "null_rate": value_null_rate},
         )
     )

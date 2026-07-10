@@ -660,9 +660,13 @@ class Workspace:
                     context="register_artifact_write",
                 )
                 entry = dict(parameter_status.get(parameter_id, {}))
+                stage_entry = entry.get(stage.value, {})
+                param_paths = list(stage_entry.get("artifact_paths", [])) if isinstance(stage_entry, dict) else []
+                if relative_path not in param_paths:
+                    param_paths.append(relative_path)
                 entry[stage.value] = {
                     "status": existing.status.value,
-                    "artifact_paths": paths,
+                    "artifact_paths": param_paths,
                     "updated_at": _utc_now_iso(),
                 }
                 parameter_status[parameter_id] = entry

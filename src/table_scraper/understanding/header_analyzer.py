@@ -148,9 +148,11 @@ class HeaderAnalyzer:
             
             # Clean parts: remove meaningless symbols
             cleaned_parts = []
-            for part in raw_headers:
+            for r_idx, part in enumerate(raw_headers):
                 p_clean = re.sub(r'^[\s/*+-]+|[\s/*+-]+$', '', part).strip()
                 if p_clean and p_clean not in ["/", "\\", "-", "State/UT"]:
+                    if r_idx < depth - 1 and p_clean in ("11", "33", "66", "132", "220", "200"):
+                        continue
                     cleaned_parts.append(p_clean)
 
             # De-duplicate adjacent parts

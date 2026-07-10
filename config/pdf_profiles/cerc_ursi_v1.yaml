@@ -1,6 +1,7 @@
 # CERC URSI regulatory report profile (v1)
 profile_id: cerc_ursi_v1
 display_name: "CERC URSI Compliance Report"
+default_year: "2026-27"
 
 supported_parameters:
   - banking_charges

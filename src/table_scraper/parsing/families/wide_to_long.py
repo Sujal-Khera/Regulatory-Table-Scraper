@@ -135,12 +135,31 @@ class WideToLongParser(BaseParser):
         # ----------------------------------------------------
         # Specialized Parser: Wheeling Charge
         # ----------------------------------------------------
+        # ----------------------------------------------------
+        # Specialized Parser: Wheeling Charge
+        # ----------------------------------------------------
         if table.parameter_id == "wheeling_charge":
+            from table_scraper.config.loader import load_parameter_config
+            param_cfg = load_parameter_config(table.parameter_id)
+            table_struct = param_cfg.extras.get("table_structure", {}) if hasattr(param_cfg, "extras") else {}
+            default_year = table_struct.get("default_year", "2026-27") if isinstance(table_struct, dict) else "2026-27"
+
             current_state = None
             current_utility = "state_level"
             
-            # Step 1: Scan header rows to detect column positions of each voltage level
-            voltage_columns = {}  # col_idx -> voltage_level_name
+            # Map each label column index to its value column index explicitly
+            label_to_value = {5: 5, 8: 8, 11: 11, 14: 14, 17: 17, 19: 18}
+            fallback_map = {
+                5: "Below 11 kV",
+                8: "11 kV",
+                11: "33 kV",
+                14: "66 kV",
+                17: "132 kV",
+                19: "220 kV & Above"
+            }
+            
+            # Scan header rows to detect custom column headers if any
+            voltage_columns = {}
             voltage_keywords = {
                 "below 11": "Below 11 kV",
                 "lt": "Below 11 kV",
@@ -163,15 +182,16 @@ class WideToLongParser(BaseParser):
                             if kw in cell:
                                 voltage_columns[c_idx] = v_name
                                 break
-                                
-            # Default mapping fallback if header scan failed to detect any voltage levels
-            if not voltage_columns:
-                for i, v_name in enumerate(["Below 11 kV", "11 kV", "33 kV", "66 kV", "132 kV", "220 kV & Above"]):
-                    voltage_columns[2 + i] = v_name
+
+            seen_keys = set()
 
             for r_idx in range(header_rows_count, len(table.rows)):
                 row = table.rows[r_idx]
+                # Skip empty or spacer rows
                 if not row or all(c.strip() == "" for c in row):
+                    continue
+                # Ensure the row has some state or utility context
+                if not row[0].strip() and (len(row) <= 1 or not row[1].strip()):
                     continue
 
                 # Scan state updates
@@ -190,32 +210,25 @@ class WideToLongParser(BaseParser):
                         current_state = state_found
                         current_utility = "state_level"
 
-                # Scan utility updates in the row text
-                for col_idx in (0, 1):
-                    if col_idx < len(row):
-                        cell_text = row[col_idx].strip()
-                        for discom_name in all_discoms:
-                            if discom_name.lower() in cell_text.lower():
-                                current_utility = discom_name
-                                break
+                # Check if this row is a state-level row to reset utility
+                col0_clean = clean_state_candidate(row[0]) if len(row) > 0 else ""
+                col1_clean = clean_state_candidate(row[1]) if len(row) > 1 else ""
+                is_state_row = (col0_clean in states or col0_clean in state_aliases or
+                                col1_clean in states or col1_clean in state_aliases)
+                if is_state_row:
+                    current_utility = "state_level"
 
-                # Check if the row has any values matching our columns
-                has_values = False
-                for c_idx in range(2, len(row)):
-                    cell = row[c_idx]
-                    v_name = None
-                    if c_idx in voltage_columns:
-                        v_name = voltage_columns[c_idx]
-                    elif (c_idx - 1) in voltage_columns:
-                        v_name = voltage_columns[c_idx - 1]
-                    elif (c_idx + 1) in voltage_columns:
-                        v_name = voltage_columns[c_idx + 1]
-                        
-                    if v_name is not None and parse_float(cell, r_idx, c_idx) is not None:
-                        has_values = True
-                        break
-                if not has_values:
-                    continue
+                # Scan utility updates in the row text
+                if not is_state_row:
+                    for col_idx in (0, 1):
+                        if col_idx < len(row):
+                            cell_text = row[col_idx].strip()
+                            if clean_state_candidate(cell_text) in states or clean_state_candidate(cell_text) in state_aliases:
+                                continue
+                            for discom_name in all_discoms:
+                                if discom_name.lower() in cell_text.lower():
+                                    current_utility = discom_name
+                                    break
 
                 year = ""
                 category = "General"
@@ -234,7 +247,7 @@ class WideToLongParser(BaseParser):
                             year = m.group(1)
                             break
                     if not re.match(r"\b20\d{2}-\d{2}\b", year):
-                        year = "2026-27"
+                        year = default_year
 
                 state = current_state if current_state else "State Level"
                 utility = current_utility
@@ -242,22 +255,23 @@ class WideToLongParser(BaseParser):
                     utility = row[0].strip()
 
                 # Parse and melt voltage columns
-                for c_idx in range(2, len(row)):
-                    cell_val = row[c_idx]
-                    val = parse_float(cell_val, r_idx, c_idx)
-                    if val is None:
+                for label_idx, value_idx in label_to_value.items():
+                    if value_idx >= len(row):
                         continue
+                    cell_val = row[value_idx]
+                    val = parse_float(cell_val)
+                    val_to_emit = val if val is not None else ""
 
-                    v_name = None
-                    if c_idx in voltage_columns:
-                        v_name = voltage_columns[c_idx]
-                    elif (c_idx - 1) in voltage_columns:
-                        v_name = voltage_columns[c_idx - 1]
-                    elif (c_idx + 1) in voltage_columns:
-                        v_name = voltage_columns[c_idx + 1]
+                    # Retrieve voltage name from scanned headers or fallback
+                    v_name = voltage_columns.get(label_idx)
+                    if not v_name:
+                        v_name = fallback_map.get(label_idx, "all")
 
-                    if v_name is None:
+                    # Key deduplication
+                    key = (state.lower(), utility.lower(), year.lower(), v_name.lower())
+                    if key in seen_keys:
                         continue
+                    seen_keys.add(key)
 
                     # Extract unit context
                     unit = "Rs/kWh"
@@ -271,7 +285,7 @@ class WideToLongParser(BaseParser):
                         "utility": utility,
                         "year": year,
                         "voltage_level": v_name,
-                        "wheeling_charge": val,
+                        "wheeling_charge": val_to_emit,
                         "charge_unit": unit,
                     }
 
@@ -279,7 +293,7 @@ class WideToLongParser(BaseParser):
                         table.parameter_id,
                         state,
                         utility,
-                        f"{category}:{v_name}:{year}:{r_idx}:{c_idx}",
+                        f"{category}:{v_name}:{year}:{r_idx}:{value_idx}",
                     )
 
                     record = ParsedRecord(
@@ -291,7 +305,7 @@ class WideToLongParser(BaseParser):
                         parser_id=self.parser_id,
                         parser_version="1.0.0",
                         confidence=1.0,
-                        provenance={"col_index": c_idx, "row_index": r_idx},
+                        provenance={"col_index": value_idx, "row_index": r_idx},
                     )
                     records.append(record)
 

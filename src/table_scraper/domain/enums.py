@@ -188,11 +188,13 @@ class RowLabel(str, Enum):
     """Per-row classification applied during table normalization."""
 
     HEADER = "header"
+    SECTION_HEADER = "section_header"
     MASTER = "master"
     CHILD = "child"
     CONTINUATION = "continuation"
     DATA = "data"
     GARBAGE = "garbage"
+
 
 
 class RoutingSource(str, Enum):

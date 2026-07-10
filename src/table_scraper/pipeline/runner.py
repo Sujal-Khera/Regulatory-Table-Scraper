@@ -1,7 +1,5 @@
-"""Execute pipeline stages in order with idempotent skip-if-complete behavior."""
-
-from __future__ import annotations
-
+from dataclasses import replace
+from datetime import datetime, timezone
 from typing import Any
 
 from table_scraper.domain.enums import SessionStage, StageStatus, ArtifactKind
@@ -46,6 +44,16 @@ def run_pipeline(session: PipelineSession, stages: list[SessionStage]) -> Pipeli
         except Exception:
             pass
 
+    if session.user_selection is not None and workspace.manifest.user_selection is None:
+        try:
+            workspace.manifest = replace(
+                workspace.manifest,
+                user_selection=session.user_selection,
+            )
+            workspace._persist_manifest()
+        except Exception:
+            pass
+
     # 2. Iterate stages in order
     export_result = None
     for stage in stages:
@@ -61,6 +69,13 @@ def run_pipeline(session: PipelineSession, stages: list[SessionStage]) -> Pipeli
                 store.write(ArtifactKind.USER_SELECTION, session.user_selection)
                 for param_id, pr in session.user_selection.confirmed_ranges.items():
                     store.write(ArtifactKind.CONFIRMED_RANGE, pr, param_id)
+
+                workspace.manifest = replace(
+                    workspace.manifest,
+                    user_selection=session.user_selection,
+                    updated_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                )
+                workspace._persist_manifest()
 
                 workspace.mark_stage_complete(
                     stage=SessionStage.SELECT,

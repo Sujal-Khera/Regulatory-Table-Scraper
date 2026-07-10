@@ -49,6 +49,10 @@ def records_to_dataframe(records: list[ParsedRecord], schema: Any) -> pd.DataFra
     rows_data: list[dict[str, Any]] = []
     for record in records:
         row_dict = dict(record.fields)
+        # Map state_level sentinels to empty strings for Excel exports
+        for key in ["utility", "discom"]:
+            if row_dict.get(key) == "state_level":
+                row_dict[key] = ""
         # Attach system coordinate metadata for lineage audit
         row_dict["record_id"] = record.record_id
         row_dict["parameter_id"] = record.parameter_id

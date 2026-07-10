@@ -66,6 +66,7 @@ def stage_export(
                 "artifact_paths": val_paths,
                 "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
             }
+            parameter_status[parameter_id] = entry
             workspace.manifest = replace(
                 workspace.manifest,
                 parameter_status=parameter_status,
@@ -104,16 +105,18 @@ def stage_export(
     )
 
     # 6. Export Cross_Subsidy_By_State workbook if cross_subsidy data is present
+    export_paths = [str(Path(output_path).name)]
     if "cross_subsidy_surcharge" in dataframes:
         css_df = dataframes["cross_subsidy_surcharge"]
         state_wb_path = Path(output_path).parent / "Cross_Subsidy_By_State.xlsx"
         try:
             export_cross_subsidy_by_state(css_df, str(state_wb_path), settings_dict)
+            if state_wb_path.is_file():
+                export_paths.append(state_wb_path.name)
         except Exception:
             pass  # Non-blocking: warehouse workbook is the primary artifact
 
     # 7. Update manifest for EXPORT parameter stage
-    export_paths = [str(Path(output_path).name)]
     for parameter_id in dataframes.keys():
         with workspace._lock:
             parameter_status = dict(workspace.manifest.parameter_status)
@@ -123,6 +126,7 @@ def stage_export(
                 "artifact_paths": export_paths,
                 "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
             }
+            parameter_status[parameter_id] = entry
             workspace.manifest = replace(
                 workspace.manifest,
                 parameter_status=parameter_status,

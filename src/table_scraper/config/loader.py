@@ -195,6 +195,7 @@ class ConfigLoader:
         self._yaml_cache: dict[Path, _YamlCacheEntry] = {}
         self._bundle_cache: dict[tuple[Any, ...], AppSettings] = {}
         self._parameter_cache: dict[tuple[Any, ...], ParameterConfig] = {}
+        self._catalog_cache: CatalogsConfig | None = None
 
     @property
     def config_root(self) -> Path:
@@ -206,6 +207,7 @@ class ConfigLoader:
         self._yaml_cache.clear()
         self._bundle_cache.clear()
         self._parameter_cache.clear()
+        self._catalog_cache = None
 
     def _require_file(self, relative_path: str) -> Path:
         """Resolve a config-relative path and ensure the file exists."""
@@ -316,6 +318,8 @@ class ConfigLoader:
 
     def load_catalogs(self) -> CatalogsConfig:
         """Load and validate catalog reference data."""
+        if self._cache_enabled and self._catalog_cache is not None:
+            return self._catalog_cache
         states = parse_states_catalog(
             self._load_yaml("catalogs/states.yaml"),
             source=str(self._config_root / "catalogs/states.yaml"),
@@ -328,12 +332,15 @@ class ConfigLoader:
             self._load_yaml("catalogs/utilities.yaml"),
             source=str(self._config_root / "catalogs/utilities.yaml"),
         )
-        return parse_catalogs(
+        catalogs = parse_catalogs(
             states,
             state_aliases,
             utilities,
             source=str(self._config_root / "catalogs"),
         )
+        if self._cache_enabled:
+            self._catalog_cache = catalogs
+        return catalogs
 
     def _resolve_profile_id(self, profile_name: str | None) -> str:
         """Resolve the active profile ID."""

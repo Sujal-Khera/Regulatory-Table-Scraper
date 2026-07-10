@@ -3,19 +3,32 @@ display_name: "Wheeling Charge"
 sheet_name: "Wheeling Charge"
 parser_id: wide_to_long_v1
 parser_family: wide_to_long
-force_pattern: wide_table
 
 table_structure:
   state_location: column
   header_rows: 3
   state_column: 0
+  default_year: "2026-27"
 
 output_schema:
-  columns: [state, utility, year, voltage_level, wheeling_charge]
+  columns:
+    - state
+    - utility
+    - year
+    - voltage_level
+    - wheeling_charge
+    - charge_unit
 
 validation:
   min_records: 20
-  max_warnings: 10
+  max_warnings: 100
+  max_null_rate: 0.95
+  required_fields:
+    - state
+    - utility
+    - year
+    - voltage_level
+    - charge_unit
 
 export:
   column_display_names:
@@ -24,6 +37,7 @@ export:
     year: "Financial Year"
     voltage_level: "Voltage Level"
     wheeling_charge: "Wheeling Charge (Rs/kWh)"
+    charge_unit: "Unit"
     confidence: "Confidence"
     source_pages: "Source Pages"
   exclude_columns: [record_id, parameter_id]

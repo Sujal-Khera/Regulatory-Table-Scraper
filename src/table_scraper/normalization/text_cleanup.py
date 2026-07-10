@@ -121,4 +121,63 @@ def normalize_text_cells(table: NormalizedTable) -> NormalizedTable:
     )
 
 
+def clean_state_candidate(val: str) -> str:
+    """Clean and normalize state name candidates by removing OCR/special characters."""
+    val = re.sub(r"\(cid:\d+\)", "", val)
+    val = val.replace("/", "").replace("*", "").strip()
+    return val.lower()
+
+
+def resolve_canonical_state(state_clean: str, catalogs: Any) -> str | None:
+    """Resolve cleaned state candidate to the exact canonical catalog name casing."""
+    states_map = {s.lower(): s for s in catalogs.states.states}
+    state_aliases = {k.lower(): v.lower() for k, v in catalogs.state_aliases.aliases.items()}
+
+    if state_clean in states_map:
+        return states_map[state_clean]
+    if state_clean in state_aliases:
+        alias_target = state_aliases[state_clean]
+        return states_map.get(alias_target, alias_target.title())
+
+    # Fuzzy match checks
+    for state_lower, state_canon in states_map.items():
+        if re.search(r"\b" + re.escape(state_lower) + r"\b", state_clean):
+            return state_canon
+    for alias_lower, state_lower in state_aliases.items():
+        if len(alias_lower) <= 3:
+            words = re.findall(r"\b\w+\b", state_clean)
+            if alias_lower in words:
+                return states_map.get(state_lower, state_lower.title())
+        else:
+            if re.search(r"\b" + re.escape(alias_lower) + r"\b", state_clean):
+                return states_map.get(state_lower, state_lower.title())
+    return None
+
+
+def detect_state_in_row(row: list[str], catalogs: Any) -> tuple[str, int] | None:
+    """Detect and resolve any canonical state name mentioned in the row's metadata fields."""
+    excluded = {
+        "ht", "lt", "eht", "category", "power", "surcharge", "charge",
+        "voltage", "level", "kv", "utility", "discom", "tension",
+        "industry", "industries", "supply", "domestic", "commercial",
+        "traction", "irrigation", "general", "billing", "period", "policy",
+        "residential", "apartment", "apartments", "township", "townships",
+        "colony", "colonies", "villa", "villas", "station", "stations"
+    }
+    for col_idx in range(min(4, len(row))):
+        cell = row[col_idx]
+        cleaned = clean_state_candidate(cell)
+        if not cleaned:
+            continue
+
+        words = re.findall(r"\b\w+\b", cleaned)
+        if any(w in excluded for w in words):
+            continue
+
+        state_canon = resolve_canonical_state(cleaned, catalogs)
+        if state_canon:
+            return state_canon, col_idx
+    return None
+
+
 

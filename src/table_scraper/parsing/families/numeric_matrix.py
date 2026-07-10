@@ -106,14 +106,14 @@ class NumericMatrixParser(BaseParser):
             pages = list(range(start, end + 1))
 
         # Load catalogs for matching states
-        states = set()
+        states_map = {}
         state_aliases = {}
         all_discoms = []
         try:
             from table_scraper.config.loader import get_config_loader
             loader = get_config_loader()
             catalogs = loader.load_catalogs()
-            states = set(s.lower() for s in catalogs.states.states)
+            states_map = {s.lower(): s for s in catalogs.states.states}
             state_aliases = {k.lower(): v.lower() for k, v in catalogs.state_aliases.aliases.items()}
             for state_name, discom_list in catalogs.utilities.utilities.items():
                 for discom in discom_list:
@@ -121,10 +121,7 @@ class NumericMatrixParser(BaseParser):
         except Exception:
             pass
 
-        def clean_state_candidate(val: str) -> str:
-            val = re.sub(r"\(cid:\d+\)", "", val)
-            val = val.replace("/", "").replace("*", "").strip()
-            return val.lower()
+        from table_scraper.normalization.text_cleanup import clean_state_candidate
 
         current_state = None
 
@@ -132,6 +129,22 @@ class NumericMatrixParser(BaseParser):
         # Specialized Parser: Transmission Charge
         # ----------------------------------------------------
         if table.parameter_id == "transmission_charge":
+            from table_scraper.config.loader import load_parameter_config
+            param_cfg = load_parameter_config(table.parameter_id)
+            col_map = {}
+            if hasattr(param_cfg, "extras") and isinstance(param_cfg.extras, dict):
+                col_map = param_cfg.extras.get("column_map", {})
+            elif isinstance(param_cfg, dict) and "column_map" in param_cfg:
+                col_map = param_cfg["column_map"]
+
+            table_struct = param_cfg.extras.get("table_structure", {}) if hasattr(param_cfg, "extras") else {}
+            default_year = table_struct.get("default_year", "2026-27") if isinstance(table_struct, dict) else "2026-27"
+
+            long_medium_charge_idx = col_map.get("long_medium_charge", 4)
+            long_medium_unit_idx = col_map.get("long_medium_unit", 6)
+            short_term_charge_idx = col_map.get("short_term_charge", 8)
+            short_term_unit_idx = col_map.get("short_term_unit", 10)
+
             for r_idx in range(header_rows_count, len(table.rows)):
                 row = table.rows[r_idx]
                 if not row or all(c.strip() == "" for c in row):
@@ -143,17 +156,19 @@ class NumericMatrixParser(BaseParser):
                 state = None
                 utility = "state_level"
 
-                if col1_clean in states:
-                    state = col1_clean.title()
+                if col1_clean in states_map:
+                    state = states_map[col1_clean]
                     utility = row[0].strip()
                 elif col1_clean in state_aliases:
-                    state = state_aliases[col1_clean].title()
+                    alias_target = state_aliases[col1_clean]
+                    state = states_map.get(alias_target, alias_target.title())
                     utility = row[0].strip()
-                elif col0_clean in states:
-                    state = col0_clean.title()
+                elif col0_clean in states_map:
+                    state = states_map[col0_clean]
                     utility = "state_level"
                 elif col0_clean in state_aliases:
-                    state = state_aliases[col0_clean].title()
+                    alias_target = state_aliases[col0_clean]
+                    state = states_map.get(alias_target, alias_target.title())
                     utility = "state_level"
 
                 if not state:
@@ -173,13 +188,13 @@ class NumericMatrixParser(BaseParser):
                         year = cell.strip()
                         break
                 if not year:
-                    year = "2026-27"
+                    year = default_year
 
-                # Parse values and units
-                long_medium_charge = parse_float(row[4], r_idx, 4) if len(row) > 4 else None
-                long_medium_unit = row[6].strip() if len(row) > 6 else ""
-                short_term_charge = parse_float(row[8], r_idx, 8) if len(row) > 8 else None
-                short_term_unit = row[10].strip() if len(row) > 10 else ""
+                # Parse values and units using config-driven indices
+                long_medium_charge = parse_float(row[long_medium_charge_idx], r_idx, long_medium_charge_idx) if len(row) > long_medium_charge_idx else None
+                long_medium_unit = row[long_medium_unit_idx].strip() if len(row) > long_medium_unit_idx else ""
+                short_term_charge = parse_float(row[short_term_charge_idx], r_idx, short_term_charge_idx) if len(row) > short_term_charge_idx else None
+                short_term_unit = row[short_term_unit_idx].strip() if len(row) > short_term_unit_idx else ""
 
                 if long_medium_charge is None and short_term_charge is None:
                     continue
@@ -189,9 +204,9 @@ class NumericMatrixParser(BaseParser):
                     "utility": utility,
                     "year": year,
                     "long_medium_charge": long_medium_charge if long_medium_charge is not None else "",
-                    "long_medium_unit": extract_unit_from_text(long_medium_unit, "Rs/MW/month") if (long_medium_unit and long_medium_charge is not None) else "",
+                    "long_medium_unit": extract_unit_from_text(long_medium_unit, "Rs/MW/month") if long_medium_unit else "",
                     "short_term_charge": short_term_charge if short_term_charge is not None else "",
-                    "short_term_unit": extract_unit_from_text(short_term_unit, "Rs/kWh") if (short_term_unit and short_term_charge is not None) else "",
+                    "short_term_unit": extract_unit_from_text(short_term_unit, "Rs/kWh") if short_term_unit else "",
                 }
 
                 rec_id = generate_record_id(
@@ -218,20 +233,38 @@ class NumericMatrixParser(BaseParser):
         # Specialized Parser: Additional Surcharge
         # ----------------------------------------------------
         elif table.parameter_id == "additional_surcharge":
+            from table_scraper.config.loader import load_parameter_config
+            param_cfg = load_parameter_config(table.parameter_id)
+            table_struct = param_cfg.extras.get("table_structure", {}) if hasattr(param_cfg, "extras") else {}
+            default_year = table_struct.get("default_year", "2026-27") if isinstance(table_struct, dict) else "2026-27"
+
+            current_section = "Low"
             for r_idx in range(header_rows_count, len(table.rows)):
                 row = table.rows[r_idx]
                 if not row or all(c.strip() == "" for c in row):
+                    continue
+
+                # Skip header/section rows and update section
+                if table.row_labels and table.row_labels[r_idx] == RowLabel.SECTION_HEADER:
+                    col1_lower = row[1].lower() if len(row) > 1 else ""
+                    if "low" in col1_lower:
+                        current_section = "Low"
+                    elif "medium" in col1_lower:
+                        current_section = "Medium"
+                    elif "not available" in col1_lower:
+                        current_section = "Not Available"
                     continue
 
                 state = None
                 for col_idx in (0, 1):
                     if col_idx < len(row):
                         cleaned = clean_state_candidate(row[col_idx])
-                        if cleaned in states:
-                            state = cleaned.title()
+                        if cleaned in states_map:
+                            state = states_map[cleaned]
                             break
                         if cleaned in state_aliases:
-                            state = state_aliases[cleaned].title()
+                            alias_target = state_aliases[cleaned]
+                            state = states_map.get(alias_target, alias_target.title())
                             break
 
                 if not state:
@@ -249,29 +282,38 @@ class NumericMatrixParser(BaseParser):
                         year = cell.strip()
                         break
                 if not year:
-                    year = "2026-27"
+                    year = default_year
 
                 val_text = ""
                 for cell in reversed(row):
-                    if cell.strip() and not re.match(r"\b20\d{2}-\d{2}\b", cell) and cell.strip().title() not in states and cell.strip().title() not in state_aliases.values():
+                    if cell.strip() and not re.match(r"\b20\d{2}-\d{2}\b", cell) and cell.strip().lower() not in states_map and cell.strip().lower() not in state_aliases:
                         val_text = cell.strip()
                         break
 
                 val = parse_additional_surcharge_value(val_text)
+                
+                # Handle NA state records (TODO-03) and multi-value/period qualified text (TODO-02)
                 if val is None:
-                    continue
+                    val_clean = val_text.strip().lower()
+                    is_na = val_clean in ("n/a", "na", "not applicable", "not available", "--", "nil", "zero", "0")
+                    if is_na and state and state != "State Level":
+                        val = 0.0 if val_clean in ("nil", "zero", "0") else ""
+                    else:
+                        continue
 
                 record_fields = {
                     "state": state,
                     "year": year,
                     "additional_surcharge": val,
+                    "additional_surcharge_text": val_text,
+                    "section": current_section
                 }
 
                 rec_id = generate_record_id(
                     table.parameter_id,
                     state,
                     "state_level",
-                    f"{year}:{r_idx}",
+                    f"{year}:{current_section}:{r_idx}",
                 )
 
                 record = ParsedRecord(

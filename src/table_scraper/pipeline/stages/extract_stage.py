@@ -60,6 +60,7 @@ def stage_extract(
             "artifact_paths": artifact_paths,
             "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         }
+        parameter_status[parameter_id] = entry
         workspace.manifest = replace(
             workspace.manifest,
             parameter_status=parameter_status,

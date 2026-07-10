@@ -77,27 +77,27 @@ def stage_parse(session: PipelineSession, parameter_id: str) -> None:
         from table_scraper.parsing import base
         base._active_annotated_table = annotated_table
 
-        # Persist new artifacts to workspaces/{workspace_id}/parsing/{parameter_id}/
-        parsing_dir = workspace.root / "parsing" / parameter_id
-        parsing_dir.mkdir(parents=True, exist_ok=True)
+        # Persist new artifacts to workspaces/{workspace_id}/extraction/{parameter_id}/
+        extraction_dir = workspace.path_for(ArtifactKind.NORMALIZED, parameter_id).parent
+        extraction_dir.mkdir(parents=True, exist_ok=True)
 
-        header_tree_path = parsing_dir / "header_tree.json"
+        header_tree_path = extraction_dir / "header_tree.json"
         header_tree_payload = ArtifactCodec.encode_value(header_tree)
         ArtifactCodec.write_json_atomic(header_tree_path, header_tree_payload)
 
-        column_descriptors_path = parsing_dir / "column_descriptors.json"
+        column_descriptors_path = extraction_dir / "column_descriptors.json"
         column_descriptors_payload = ArtifactCodec.encode_value(columns)
         ArtifactCodec.write_json_atomic(column_descriptors_path, column_descriptors_payload)
 
-        annotated_table_path = parsing_dir / "annotated_table.json"
+        annotated_table_path = extraction_dir / "annotated_table.json"
         annotated_table_payload = ArtifactCodec.encode_value(annotated_table)
         ArtifactCodec.write_json_atomic(annotated_table_path, annotated_table_payload)
 
         # Add to norm_paths for manifest tracking
         norm_paths.extend([
-            f"parsing/{parameter_id}/header_tree.json",
-            f"parsing/{parameter_id}/column_descriptors.json",
-            f"parsing/{parameter_id}/annotated_table.json"
+            f"extraction/{parameter_id}/header_tree.json",
+            f"extraction/{parameter_id}/column_descriptors.json",
+            f"extraction/{parameter_id}/annotated_table.json"
         ])
     except Exception as e:
         print(f"Error in Document Understanding run in stage_parse: {e}")
@@ -110,6 +110,7 @@ def stage_parse(session: PipelineSession, parameter_id: str) -> None:
             "artifact_paths": norm_paths,
             "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         }
+        parameter_status[parameter_id] = entry
         workspace.manifest = replace(
             workspace.manifest,
             parameter_status=parameter_status,
@@ -140,6 +141,7 @@ def stage_parse(session: PipelineSession, parameter_id: str) -> None:
             "artifact_paths": classify_paths,
             "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         }
+        parameter_status[parameter_id] = entry
         workspace.manifest = replace(
             workspace.manifest,
             parameter_status=parameter_status,
@@ -161,12 +163,18 @@ def stage_parse(session: PipelineSession, parameter_id: str) -> None:
     if session.registry is None:
         session.registry = ParserRegistry()
 
-    # Inject workspace into session settings if needed
+    # Inject workspace and page_range into session settings if needed
+    page_range = None
+    if session.user_selection and session.user_selection.confirmed_ranges:
+        page_range = session.user_selection.confirmed_ranges.get(parameter_id)
+
     if session.settings is not None:
         if isinstance(session.settings, dict):
             session.settings["workspace"] = workspace
+            session.settings["page_range"] = page_range
         elif hasattr(session.settings, "workspace"):
             session.settings.workspace = workspace
+            session.settings.page_range = page_range
 
     result = route_and_parse(normalized, classification, blocks, session.settings, session.registry)
     store.write(ArtifactKind.RECORDS, result, parameter_id)
@@ -183,6 +191,7 @@ def stage_parse(session: PipelineSession, parameter_id: str) -> None:
             "artifact_paths": parse_paths,
             "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         }
+        parameter_status[parameter_id] = entry
         workspace.manifest = replace(
             workspace.manifest,
             parameter_status=parameter_status,

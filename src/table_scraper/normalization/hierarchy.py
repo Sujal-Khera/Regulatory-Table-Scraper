@@ -53,57 +53,14 @@ def propagate_hierarchy(table: NormalizedTable, rules: Any) -> NormalizedTable:
                 state_col = int(ts.get("state_column", 0))
                 header_keywords = ts.get("header_keywords", header_keywords)
     except Exception:
-        pass
+        catalogs = None
+
+    from table_scraper.normalization.text_cleanup import detect_state_in_row
 
     new_rows: list[list[str]] = []
     row_labels: list[RowLabel] = []
     current_state = None
     propagated_count = 0
-
-    def clean_state_candidate(val: str) -> str:
-        val = re.sub(r"\(cid:\d+\)", "", val)
-        val = val.replace("/", "").replace("*", "").strip()
-        return val.lower()
-
-    def detect_state_in_row(row: list[str]) -> tuple[str, int] | None:
-        # Exclude category/charge descriptions to avoid false positives on state names
-        excluded = {
-            "ht", "lt", "eht", "category", "power", "surcharge", "charge",
-            "voltage", "level", "kv", "utility", "discom", "tension",
-            "industry", "industries", "supply", "domestic", "commercial",
-            "traction", "irrigation", "general", "billing", "period", "policy",
-            "residential", "apartment", "apartments", "township", "townships",
-            "colony", "colonies", "villa", "villas", "station", "stations"
-        }
-        for col_idx in range(min(4, len(row))):
-            cell = row[col_idx]
-            cleaned = clean_state_candidate(cell)
-            if not cleaned:
-                continue
-
-            # Tokenize and check for excluded keywords
-            words = re.findall(r"\b\w+\b", cleaned)
-            if any(w in excluded for w in words):
-                continue
-
-            # Exact match check
-            if cleaned in states:
-                return cleaned.title(), col_idx
-            if cleaned in state_aliases:
-                return state_aliases[cleaned].title(), col_idx
-                
-            # Fuzzy match checks
-            for state in states:
-                if re.search(r"\b" + re.escape(state) + r"\b", cleaned):
-                    return state.title(), col_idx
-            for alias, state in state_aliases.items():
-                if len(alias) <= 3:
-                    if alias in words:
-                        return state.title(), col_idx
-                else:
-                    if re.search(r"\b" + re.escape(alias) + r"\b", cleaned):
-                        return state.title(), col_idx
-        return None
 
     for idx, row in enumerate(table.rows):
         # A. Mark header rows based on count
@@ -124,8 +81,26 @@ def propagate_hierarchy(table: NormalizedTable, rules: Any) -> NormalizedTable:
             new_rows.append(row)
             continue
 
+        # Check for section header row
+        is_section_header = False
+        if table.parameter_id == "additional_surcharge" and idx >= header_rows_count:
+            col1 = row[1].strip() if len(row) > 1 else ""
+            col0 = row[0].strip() if len(row) > 0 else ""
+            if not col0 and col1:
+                col1_lower = col1.lower()
+                has_threshold_pattern = any(x in col1_lower for x in ("≤", ">", "level", "not available"))
+                all_data_empty = all(cell.strip() == "" for cell in row[2:])
+                if has_threshold_pattern and all_data_empty:
+                    is_section_header = True
+
+        if is_section_header:
+            row_labels.append(RowLabel.SECTION_HEADER)
+            new_rows.append(row)
+            current_state = None
+            continue
+
         # C. State row detection
-        state_match = detect_state_in_row(row)
+        state_match = detect_state_in_row(row, catalogs) if catalogs else None
         if state_match:
             current_state = state_match[0]
             row_labels.append(RowLabel.MASTER)

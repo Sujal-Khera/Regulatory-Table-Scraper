@@ -187,12 +187,20 @@ class ArtifactCodec:
             dir=str(path.parent),
         )
         temp_path = Path(temp_name)
+        import time
         try:
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
                 handle.write(encoded)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temp_path, path)
+            for i in range(10):
+                try:
+                    os.replace(temp_path, path)
+                    break
+                except PermissionError as e:
+                    if i == 9:
+                        raise e
+                    time.sleep(0.1)
         finally:
             if temp_path.exists():
                 temp_path.unlink(missing_ok=True)
@@ -207,12 +215,20 @@ class ArtifactCodec:
             dir=str(path.parent),
         )
         temp_path = Path(temp_name)
+        import time
         try:
             with os.fdopen(fd, "wb") as handle:
                 handle.write(payload)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temp_path, path)
+            for i in range(10):
+                try:
+                    os.replace(temp_path, path)
+                    break
+                except PermissionError as e:
+                    if i == 9:
+                        raise e
+                    time.sleep(0.1)
         finally:
             if temp_path.exists():
                 temp_path.unlink(missing_ok=True)

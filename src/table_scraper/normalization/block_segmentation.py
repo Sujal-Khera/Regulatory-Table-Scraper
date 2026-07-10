@@ -53,6 +53,7 @@ def _create_block(
     block_rows: list[list[str]],
     table: NormalizedTable,
     config: Any,
+    catalogs: Any = None,
 ) -> StateBlock:
     """Build a single StateBlock object from clustered rows."""
     start_page, end_page = _resolve_page_span(config)
@@ -72,9 +73,10 @@ def _create_block(
     # 2. Detect utility columns
     detected_utilities = set()
     try:
-        from table_scraper.config.loader import get_config_loader
-        loader = get_config_loader()
-        catalogs = loader.load_catalogs()
+        if catalogs is None:
+            from table_scraper.config.loader import get_config_loader
+            loader = get_config_loader()
+            catalogs = loader.load_catalogs()
         
         # Mapping variations for search
         aliases_map = {
@@ -95,7 +97,8 @@ def _create_block(
             "tpsodl": "TPSODL", "tpwodl": "TPWODL", "pspcl": "PSPCL",
             "avvnl": "AVVNL", "jdvvnl": "JdVVNL", "jvvnl": "JVVNL",
             "upcl": "UPCL", "cpdl": "Chandigarh ED", "dnhpdcl": "DNHPDCL",
-            "dded": "DDED", "ed-a&ni": "A&N Electricity Department"
+            "dded": "DDED", "ed-a&ni": "A&N Electricity Department",
+            "arunachal pd": "DoP Arunachal", "tgnpdcl": "TSNPDCL"
         }
         
         for row in block_rows:
@@ -182,25 +185,63 @@ def segment_state_blocks(table: NormalizedTable, config: Any) -> list[StateBlock
     except Exception:
         pass
 
-    # Load catalogs for state name matching
-    states = set()
+    from table_scraper.normalization.text_cleanup import clean_state_candidate
+
+    # Load catalogs for state and DISCOM name matching
+    states_map = {}
     state_aliases = {}
+    discom_to_state = {}
+    catalogs = None
     try:
         from table_scraper.config.loader import get_config_loader
         loader = get_config_loader()
         catalogs = loader.load_catalogs()
-        states = set(s.lower() for s in catalogs.states.states)
+        states_map = {s.lower(): s for s in catalogs.states.states}
         state_aliases = {k.lower(): v.lower() for k, v in catalogs.state_aliases.aliases.items()}
+        for state_name, discom_list in catalogs.utilities.utilities.items():
+            for discom in discom_list:
+                discom_to_state[discom.lower()] = state_name
     except Exception:
         pass
 
     blocks: list[StateBlock] = []
 
-    def clean_state_candidate(val: str) -> str:
-        # remove (cid:\d+), slash, asterisk, trailing/leading spaces
-        val = re.sub(r"\(cid:\d+\)", "", val)
-        val = val.replace("/", "").replace("*", "").strip()
-        return val.lower()
+    def resolve_state_from_text(text: str) -> str | None:
+        cleaned = clean_state_candidate(text)
+        if not cleaned:
+            return None
+        
+        # 1. Exact state match
+        if cleaned in states_map:
+            return states_map[cleaned]
+        if cleaned in state_aliases:
+            alias_target = state_aliases[cleaned]
+            return states_map.get(alias_target, alias_target.title())
+            
+        # 2. Exact DISCOM match
+        if cleaned in discom_to_state:
+            state_lower = discom_to_state[cleaned].lower()
+            return states_map.get(state_lower, state_lower.title())
+            
+        # 3. Fuzzy match checks
+        for state_lower, state_canon in states_map.items():
+            if re.search(r"\b" + re.escape(state_lower) + r"\b", cleaned):
+                return state_canon
+        for alias, state_lower in state_aliases.items():
+            if len(alias) <= 3:
+                if alias in re.findall(r"\b\w+\b", cleaned):
+                    return states_map.get(state_lower, state_lower.title())
+            else:
+                if re.search(r"\b" + re.escape(alias) + r"\b", cleaned):
+                    return states_map.get(state_lower, state_lower.title())
+                    
+        # 4. Fuzzy DISCOM match check
+        for discom, state_name in discom_to_state.items():
+            if re.search(r"\b" + re.escape(discom) + r"\b", cleaned):
+                state_lower = state_name.lower()
+                return states_map.get(state_lower, state_lower.title())
+                
+        return None
 
     def detect_state_in_row(row: list[str]) -> tuple[str, int] | None:
         # Exclude category/charge descriptions to avoid false positives on state names
@@ -224,23 +265,9 @@ def segment_state_blocks(table: NormalizedTable, config: Any) -> list[StateBlock
             if any(w in excluded for w in words):
                 continue
 
-            # Exact match check
-            if cleaned in states:
-                return cleaned.title(), col_idx
-            if cleaned in state_aliases:
-                return state_aliases[cleaned].title(), col_idx
-                
-            # Fuzzy match checks (e.g., "andhra pradesh" inside "andhra pradesh")
-            for state in states:
-                if re.search(r"\b" + re.escape(state) + r"\b", cleaned):
-                    return state.title(), col_idx
-            for alias, state in state_aliases.items():
-                if len(alias) <= 3:
-                    if alias in words:
-                        return state.title(), col_idx
-                else:
-                    if re.search(r"\b" + re.escape(alias) + r"\b", cleaned):
-                        return state.title(), col_idx
+            resolved = resolve_state_from_text(cell)
+            if resolved:
+                return resolved, col_idx
         return None
 
     if state_location == "spanning":
@@ -255,7 +282,10 @@ def segment_state_blocks(table: NormalizedTable, config: Any) -> list[StateBlock
             if table.row_labels and table.row_labels[idx] == RowLabel.MASTER:
                 is_state = True
                 res = detect_state_in_row(row)
-                state_name = res[0] if res else row[1].strip() or row[0].strip()
+                if res:
+                    state_name = res[0]
+                else:
+                    is_state = False
             else:
                 # Fallback check
                 res = detect_state_in_row(row)
@@ -274,6 +304,7 @@ def segment_state_blocks(table: NormalizedTable, config: Any) -> list[StateBlock
                             block_rows,
                             table,
                             config,
+                            catalogs,
                         )
                     )
                 current_state = state_name
@@ -293,6 +324,7 @@ def segment_state_blocks(table: NormalizedTable, config: Any) -> list[StateBlock
                     block_rows,
                     table,
                     config,
+                    catalogs,
                 )
             )
 
@@ -310,15 +342,13 @@ def segment_state_blocks(table: NormalizedTable, config: Any) -> list[StateBlock
             state_cell = row[state_col].strip() if state_col < len(row) else ""
 
             if state_cell:
-                # Canonicalize state name
-                cleaned = clean_state_candidate(state_cell)
-                canonical_state = state_cell.title()
-                if cleaned in states:
-                    canonical_state = cleaned.title()
-                elif cleaned in state_aliases:
-                    canonical_state = state_aliases[cleaned].title()
+                resolved_state = resolve_state_from_text(state_cell)
+                if not resolved_state:
+                    if current_state is not None:
+                        block_rows.append(row)
+                    continue
 
-                if current_state != canonical_state:
+                if current_state != resolved_state:
                     # Flush previous state block
                     if current_state is not None:
                         blocks.append(
@@ -329,9 +359,10 @@ def segment_state_blocks(table: NormalizedTable, config: Any) -> list[StateBlock
                                 block_rows,
                                 table,
                                 config,
+                                catalogs,
                             )
                         )
-                    current_state = canonical_state
+                    current_state = resolved_state
                     start_row_idx = idx
                     block_rows = [row]
                 else:
@@ -350,6 +381,7 @@ def segment_state_blocks(table: NormalizedTable, config: Any) -> list[StateBlock
                     block_rows,
                     table,
                     config,
+                    catalogs,
                 )
             )
 

@@ -9,6 +9,12 @@ table_structure:
   state_location: column
   header_rows: 2
   state_column: 0
+  default_year: "2026-27"
+  column_map:
+    long_medium_charge: 4
+    long_medium_unit: 6
+    short_term_charge: 8
+    short_term_unit: 10
 
 output_schema:
   columns:
@@ -23,6 +29,7 @@ output_schema:
 validation:
   min_records: 20
   max_warnings: 10
+  required_fields: [state, utility, year]
 
 export:
   column_display_names:

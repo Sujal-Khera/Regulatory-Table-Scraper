@@ -67,23 +67,20 @@ class NarrativeParser(BaseParser):
             import re
             
             # Load catalogs for matching states
-            states = set()
+            states_map = {}
             state_aliases = {}
             utilities = []
             try:
                 from table_scraper.config.loader import get_config_loader
                 loader = get_config_loader()
                 catalogs = loader.load_catalogs()
-                states = set(s.lower() for s in catalogs.states.states)
+                states_map = {s.lower(): s for s in catalogs.states.states}
                 state_aliases = {k.lower(): v.lower() for k, v in catalogs.state_aliases.aliases.items()}
                 utilities = catalogs.utilities.utilities
             except Exception:
                 pass
 
-            def clean_state_candidate(val: str) -> str:
-                val = re.sub(r"\(cid:\d+\)", "", val)
-                val = val.replace("/", "").replace("*", "").strip()
-                return val.lower()
+            from table_scraper.normalization.text_cleanup import clean_state_candidate
 
             current_state = None
             current_charge = ""
@@ -98,10 +95,11 @@ class NarrativeParser(BaseParser):
                 # Scan state candidate in row[0]
                 state_candidate = clean_state_candidate(row[0])
                 state = None
-                if state_candidate in states:
-                    state = state_candidate.title()
+                if state_candidate in states_map:
+                    state = states_map[state_candidate]
                 elif state_candidate in state_aliases:
-                    state = state_aliases[state_candidate].title()
+                    alias_target = state_aliases[state_candidate]
+                    state = states_map.get(alias_target, alias_target.title())
 
                 if state:
                     if current_state != state:

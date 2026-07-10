@@ -9,19 +9,24 @@ table_structure:
   state_location: column
   header_rows: 2
   state_column: 0
+  default_year: "2026-27"
 
 output_schema:
-  columns: [state, year, additional_surcharge]
+  columns: [state, year, additional_surcharge, additional_surcharge_text, section]
 
 validation:
   min_records: 20
   max_warnings: 10
+  required_fields: [state, year]
+  max_null_rate: 0.55
 
 export:
   column_display_names:
     state: "State/UT"
     year: "Financial Year"
     additional_surcharge: "Additional Surcharge (Rs/kWh)"
+    additional_surcharge_text: "Additional Surcharge (Raw Text)"
+    section: "Surcharge Bracket"
     confidence: "Confidence"
     source_pages: "Source Pages"
   exclude_columns: [record_id, parameter_id]

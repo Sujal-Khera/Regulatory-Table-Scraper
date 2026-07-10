@@ -17,6 +17,8 @@ output_schema:
 validation:
   min_records: 20
   max_warnings: 10
+  required_fields: [state, discom, charge]
+  max_null_rate: 0.15
 
 export:
   column_display_names:
