@@ -41,9 +41,9 @@ def validate_parse_result(result: ParseResult, parameter_config: Any) -> Validat
     except Exception:
         pass
 
-    # Helper to check if value is null (None or empty string)
+    # Helper to check if value is null (None, empty string, or 'N/A' sentinel)
     def is_null(v: Any) -> bool:
-        return v is None or (isinstance(v, str) and not v.strip())
+        return v is None or (isinstance(v, str) and (not v.strip() or v.strip().lower() == "n/a"))
 
     # 0. Confidence Recalibration
     for record in result.records:

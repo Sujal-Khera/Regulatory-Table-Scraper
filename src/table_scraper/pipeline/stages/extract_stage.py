@@ -48,8 +48,8 @@ def stage_extract(
     store.write(ArtifactKind.RAW_MERGED, merged, parameter_id)
 
     # 5. Mark stage complete for parameter in parameter_status manifest
-    rel_pages_path = str(workspace.path_for(ArtifactKind.RAW_PAGES, parameter_id).relative_to(workspace.root))
-    rel_merged_path = str(workspace.path_for(ArtifactKind.RAW_MERGED, parameter_id).relative_to(workspace.root))
+    rel_pages_path = workspace.path_for(ArtifactKind.RAW_PAGES, parameter_id).relative_to(workspace.root).as_posix()
+    rel_merged_path = workspace.path_for(ArtifactKind.RAW_MERGED, parameter_id).relative_to(workspace.root).as_posix()
     artifact_paths = [rel_pages_path, rel_merged_path]
 
     with workspace._lock:

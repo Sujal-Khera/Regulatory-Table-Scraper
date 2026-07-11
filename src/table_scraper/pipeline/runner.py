@@ -81,7 +81,7 @@ def run_pipeline(session: PipelineSession, stages: list[SessionStage]) -> Pipeli
                     stage=SessionStage.SELECT,
                     input_hash=workspace.manifest.pdf.content_hash,
                     artifact_paths=[
-                        str(workspace.path_for(ArtifactKind.USER_SELECTION).relative_to(workspace.root))
+                        workspace.path_for(ArtifactKind.USER_SELECTION).relative_to(workspace.root).as_posix()
                     ],
                 )
 

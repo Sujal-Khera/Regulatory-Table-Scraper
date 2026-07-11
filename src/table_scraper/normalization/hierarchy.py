@@ -81,17 +81,27 @@ def propagate_hierarchy(table: NormalizedTable, rules: Any) -> NormalizedTable:
             new_rows.append(row)
             continue
 
-        # Check for section header row
+        # Check for section header row dynamically from configuration
         is_section_header = False
-        if table.parameter_id == "additional_surcharge" and idx >= header_rows_count:
-            col1 = row[1].strip() if len(row) > 1 else ""
-            col0 = row[0].strip() if len(row) > 0 else ""
-            if not col0 and col1:
-                col1_lower = col1.lower()
-                has_threshold_pattern = any(x in col1_lower for x in ("≤", ">", "level", "not available"))
-                all_data_empty = all(cell.strip() == "" for cell in row[2:])
-                if has_threshold_pattern and all_data_empty:
-                    is_section_header = True
+        try:
+            from table_scraper.config.loader import load_parameter_config
+            param_cfg = load_parameter_config(table.parameter_id)
+            if param_cfg is not None:
+                ts = param_cfg.extras.get("table_structure", {}) if hasattr(param_cfg, "extras") else {}
+                sec_cfg = ts.get("section_header") if isinstance(ts, dict) else None
+                if sec_cfg and isinstance(sec_cfg, dict):
+                    sec_col = int(sec_cfg.get("column", 1))
+                    sec_patterns = sec_cfg.get("patterns", [])
+                    if sec_col < len(row):
+                        col_val = row[sec_col].strip().lower()
+                        col0 = row[0].strip() if len(row) > 0 else ""
+                        if not col0 and col_val:
+                            has_pattern = any(pat.lower() in col_val for pat in sec_patterns)
+                            all_data_empty = all(cell.strip() == "" for cell in row[sec_col + 1:])
+                            if has_pattern and all_data_empty:
+                                is_section_header = True
+        except Exception:
+            pass
 
         if is_section_header:
             row_labels.append(RowLabel.SECTION_HEADER)

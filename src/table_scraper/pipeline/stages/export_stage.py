@@ -55,7 +55,7 @@ def stage_export(
         validation_reports[parameter_id] = report
 
         # Update manifest for VALIDATE parameter stage
-        rel_val_path = str(workspace.path_for(ArtifactKind.VALIDATION, parameter_id).relative_to(workspace.root))
+        rel_val_path = workspace.path_for(ArtifactKind.VALIDATION, parameter_id).relative_to(workspace.root).as_posix()
         val_paths = [rel_val_path]
 
         with workspace._lock:

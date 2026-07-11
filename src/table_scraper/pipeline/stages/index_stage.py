@@ -31,8 +31,8 @@ def stage_index(session: PipelineSession) -> None:
 
     # 3. Mark stage complete in workspace manifest
     artifact_paths = [
-        str(workspace.path_for(ArtifactKind.PAGE_INDEX).relative_to(workspace.root)),
-        str(workspace.path_for(ArtifactKind.PAGE_INDEX_CSV).relative_to(workspace.root)),
+        workspace.path_for(ArtifactKind.PAGE_INDEX).relative_to(workspace.root).as_posix(),
+        workspace.path_for(ArtifactKind.PAGE_INDEX_CSV).relative_to(workspace.root).as_posix(),
     ]
     workspace.mark_stage_complete(
         stage=SessionStage.INDEX,

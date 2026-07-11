@@ -53,8 +53,8 @@ def stage_parse(session: PipelineSession, parameter_id: str) -> None:
     store.write(ArtifactKind.STATE_BLOCKS, blocks, parameter_id)
 
     # Update manifest for NORMALIZE parameter stage
-    rel_norm_path = str(workspace.path_for(ArtifactKind.NORMALIZED, parameter_id).relative_to(workspace.root))
-    rel_blocks_path = str(workspace.path_for(ArtifactKind.STATE_BLOCKS, parameter_id).relative_to(workspace.root))
+    rel_norm_path = workspace.path_for(ArtifactKind.NORMALIZED, parameter_id).relative_to(workspace.root).as_posix()
+    rel_blocks_path = workspace.path_for(ArtifactKind.STATE_BLOCKS, parameter_id).relative_to(workspace.root).as_posix()
     norm_paths = [rel_norm_path, rel_blocks_path]
 
     # Run Document Understanding / Header Semantics
@@ -130,7 +130,7 @@ def stage_parse(session: PipelineSession, parameter_id: str) -> None:
     store.write(ArtifactKind.PATTERN, classification, parameter_id)
 
     # Update manifest for CLASSIFY parameter stage
-    rel_pattern_path = str(workspace.path_for(ArtifactKind.PATTERN, parameter_id).relative_to(workspace.root))
+    rel_pattern_path = workspace.path_for(ArtifactKind.PATTERN, parameter_id).relative_to(workspace.root).as_posix()
     classify_paths = [rel_pattern_path]
 
     with workspace._lock:
@@ -163,24 +163,44 @@ def stage_parse(session: PipelineSession, parameter_id: str) -> None:
     if session.registry is None:
         session.registry = ParserRegistry()
 
-    # Inject workspace and page_range into session settings if needed
+    # Resolve the confirmed page_range for this specific parameter
     page_range = None
     if session.user_selection and session.user_selection.confirmed_ranges:
         page_range = session.user_selection.confirmed_ranges.get(parameter_id)
 
-    if session.settings is not None:
-        if isinstance(session.settings, dict):
-            session.settings["workspace"] = workspace
-            session.settings["page_range"] = page_range
-        elif hasattr(session.settings, "workspace"):
-            session.settings.workspace = workspace
-            session.settings.page_range = page_range
+    # AppSettings is a frozen dataclass — we cannot mutate it.
+    # Build a plain dict that carries all AppSettings fields plus page_range
+    # and workspace so every parser family can read them safely.
+    if isinstance(session.settings, dict):
+        parse_config: dict = dict(session.settings)
+    else:
+        # Flatten frozen AppSettings (or any object) into a dict
+        parse_config = {}
+        if session.settings is not None:
+            for attr in (
+                f for f in vars(session.settings.__class__)
+                if not f.startswith("_")
+            ):
+                try:
+                    parse_config[attr] = getattr(session.settings, attr)
+                except Exception:
+                    pass
+            # Also try __dataclass_fields__ for dataclasses
+            if hasattr(session.settings, "__dataclass_fields__"):
+                for field_name in session.settings.__dataclass_fields__:
+                    try:
+                        parse_config[field_name] = getattr(session.settings, field_name)
+                    except Exception:
+                        pass
 
-    result = route_and_parse(normalized, classification, blocks, session.settings, session.registry)
+    parse_config["workspace"] = workspace
+    parse_config["page_range"] = page_range
+
+    result = route_and_parse(normalized, classification, blocks, parse_config, session.registry)
     store.write(ArtifactKind.RECORDS, result, parameter_id)
 
     # Update manifest for PARSE parameter stage
-    rel_records_path = str(workspace.path_for(ArtifactKind.RECORDS, parameter_id).relative_to(workspace.root))
+    rel_records_path = workspace.path_for(ArtifactKind.RECORDS, parameter_id).relative_to(workspace.root).as_posix()
     parse_paths = [rel_records_path]
 
     with workspace._lock:

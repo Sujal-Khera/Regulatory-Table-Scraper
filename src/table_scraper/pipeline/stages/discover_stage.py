@@ -46,7 +46,7 @@ def stage_discover(session: PipelineSession) -> None:
 
     # 5. Mark stage completed in manifest
     artifact_paths = [
-        str(workspace.path_for(ArtifactKind.PARAMETER_CATALOG).relative_to(workspace.root)),
+        workspace.path_for(ArtifactKind.PARAMETER_CATALOG).relative_to(workspace.root).as_posix(),
     ]
     workspace.mark_stage_complete(
         stage=SessionStage.DISCOVER,

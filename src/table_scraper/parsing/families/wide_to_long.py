@@ -66,28 +66,7 @@ class WideToLongParser(BaseParser):
             end = pr.get("end_page", start) if isinstance(pr, dict) else getattr(pr, "end_page", start)
             pages = list(range(start, end + 1))
 
-        # Helper to extract unit
-        def extract_unit_from_text(text: str, default: str = "Rs/kWh") -> str:
-            text_lower = text.lower()
-            if "paise/kwh" in text_lower or "p/kwh" in text_lower:
-                return "paise/kWh"
-            if "rs/kw/month" in text_lower or "rs/kw/m" in text_lower or "rs./kw/month" in text_lower:
-                return "Rs/kW/month"
-            if "rs/kva/month" in text_lower or "rs/kva/m" in text_lower:
-                return "Rs/kVA/month"
-            if "rs/mw/month" in text_lower or "rs/mw/m" in text_lower:
-                return "Rs/MW/month"
-            if "rs/mw/day" in text_lower or "rs/mw/d" in text_lower:
-                return "Rs/MW/day"
-            if "rs/mwh" in text_lower:
-                return "Rs/MWh"
-            if "%" in text_lower or "percent" in text_lower:
-                return "%"
-            if "rs cr" in text_lower or "rs. cr" in text_lower:
-                return "Rs Cr."
-            if "rs/kwh" in text_lower or "rs./kwh" in text_lower:
-                return "Rs/kWh"
-            return default
+        from table_scraper.parsing.unit_utils import extract_unit_from_text
 
         # Helper to extract voltage level
         def _extract_voltage(header: str) -> str:
@@ -147,49 +126,25 @@ class WideToLongParser(BaseParser):
             current_state = None
             current_utility = "state_level"
             
-            # Map each label column index to its value column index explicitly
-            label_to_value = {5: 5, 8: 8, 11: 11, 14: 14, 17: 17, 19: 18}
-            fallback_map = {
-                5: "Below 11 kV",
-                8: "11 kV",
-                11: "33 kV",
-                14: "66 kV",
-                17: "132 kV",
-                19: "220 kV & Above"
-            }
-            
-            # Scan header rows to detect custom column headers if any
-            voltage_columns = {}
-            voltage_keywords = {
-                "below 11": "Below 11 kV",
-                "lt": "Below 11 kV",
-                "11 kv": "11 kV",
-                "33 kv": "33 kV",
-                "66 kv": "66 kV",
-                "132 kv": "132 kV",
-                "200 kv": "220 kV & Above",
-                "220 kv": "220 kV & Above",
-                "above": "220 kV & Above"
-            }
-            
-            for r_idx in range(header_rows_count):
-                if r_idx < len(table.rows):
-                    for c_idx in range(len(table.rows[r_idx])):
-                        cell = table.rows[r_idx][c_idx].strip().lower()
-                        if not cell:
-                            continue
-                        for kw, v_name in voltage_keywords.items():
-                            if kw in cell:
-                                voltage_columns[c_idx] = v_name
-                                break
-
+            voltage_column_maps = table_struct.get("voltage_column_maps", {})
+            current_page = 59
+            current_offset = 0
             seen_keys = set()
 
             for r_idx in range(header_rows_count, len(table.rows)):
                 row = table.rows[r_idx]
-                # Skip empty or spacer rows
                 if not row or all(c.strip() == "" for c in row):
                     continue
+
+                # Check if it is a repeated header row / page transition
+                if len(row) > 0 and any(x in str(row[0]).lower() or x in str(row[1]).lower() for x in ["states/uts", "voltage level", "applicable period"]):
+                    if "states/uts" in str(row[0]).lower():
+                        if current_page == 59:
+                            current_page = 60
+                        elif current_page == 60:
+                            current_page = 61
+                    continue
+
                 # Ensure the row has some state or utility context
                 if not row[0].strip() and (len(row) <= 1 or not row[1].strip()):
                     continue
@@ -230,6 +185,16 @@ class WideToLongParser(BaseParser):
                                     current_utility = discom_name
                                     break
 
+                # Determine offset dynamically based on financial year column
+                y_idx = None
+                for col_idx in range(len(row)):
+                    if re.match(r"\b20\d{2}-\d{2}\b", row[col_idx].strip()):
+                        y_idx = col_idx
+                        break
+
+                if y_idx is not None:
+                    current_offset = y_idx - 2
+
                 year = ""
                 category = "General"
                 
@@ -254,18 +219,27 @@ class WideToLongParser(BaseParser):
                 if utility == "state_level" and len(row) > 0 and row[0].strip() and row[0].strip().title() not in states:
                     utility = row[0].strip()
 
+                # Get column indices for this page and offset
+                page_maps = voltage_column_maps.get(current_page, {}) or voltage_column_maps.get(str(current_page), {})
+                col_map = page_maps.get(current_offset, {}) or page_maps.get(str(current_offset), {})
+                if not col_map:
+                    # Fallback to page 59 default
+                    col_map = {
+                        "Below 11 kV": 5,
+                        "11 kV": 8,
+                        "33 kV": 11,
+                        "66 kV": 14,
+                        "132 kV": 17,
+                        "200 kV & Above": 18
+                    }
+
                 # Parse and melt voltage columns
-                for label_idx, value_idx in label_to_value.items():
+                for v_name, value_idx in col_map.items():
                     if value_idx >= len(row):
                         continue
                     cell_val = row[value_idx]
                     val = parse_float(cell_val)
                     val_to_emit = val if val is not None else ""
-
-                    # Retrieve voltage name from scanned headers or fallback
-                    v_name = voltage_columns.get(label_idx)
-                    if not v_name:
-                        v_name = fallback_map.get(label_idx, "all")
 
                     # Key deduplication
                     key = (state.lower(), utility.lower(), year.lower(), v_name.lower())

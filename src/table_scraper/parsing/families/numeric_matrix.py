@@ -11,27 +11,7 @@ from table_scraper.domain.models import NormalizedTable, ParseResult, ParsedReco
 from table_scraper.parsing.base import BaseParser, parse_float, generate_record_id
 
 
-def extract_unit_from_text(text: str, default: str = "Rs/kWh") -> str:
-    text_lower = text.lower()
-    if "paise/kwh" in text_lower or "p/kwh" in text_lower:
-        return "paise/kWh"
-    if "rs/kw/month" in text_lower or "rs/kw/m" in text_lower or "rs./kw/month" in text_lower:
-        return "Rs/kW/month"
-    if "rs/kva/month" in text_lower or "rs/kva/m" in text_lower:
-        return "Rs/kVA/month"
-    if "rs/mw/month" in text_lower or "rs/mw/m" in text_lower:
-        return "Rs/MW/month"
-    if "rs/mw/day" in text_lower or "rs/mw/d" in text_lower:
-        return "Rs/MW/day"
-    if "rs/mwh" in text_lower:
-        return "Rs/MWh"
-    if "%" in text_lower or "percent" in text_lower:
-        return "%"
-    if "rs cr" in text_lower or "rs. cr" in text_lower:
-        return "Rs Cr."
-    if "rs/kwh" in text_lower or "rs./kwh" in text_lower:
-        return "Rs/kWh"
-    return default
+from table_scraper.parsing.unit_utils import extract_unit_from_text
 
 
 def parse_additional_surcharge_value(val_str: str) -> float | None:
@@ -104,6 +84,11 @@ class NumericMatrixParser(BaseParser):
             start = getattr(config.page_range, "start_page", 1)
             end = getattr(config.page_range, "end_page", start)
             pages = list(range(start, end + 1))
+        elif isinstance(config, dict) and "page_range" in config and config["page_range"]:
+            pr = config["page_range"]
+            start = pr.get("start_page", 1) if isinstance(pr, dict) else getattr(pr, "start_page", 1)
+            end = pr.get("end_page", start) if isinstance(pr, dict) else getattr(pr, "end_page", start)
+            pages = list(range(start, end + 1))
 
         # Load catalogs for matching states
         states_map = {}
@@ -140,11 +125,8 @@ class NumericMatrixParser(BaseParser):
             table_struct = param_cfg.extras.get("table_structure", {}) if hasattr(param_cfg, "extras") else {}
             default_year = table_struct.get("default_year", "2026-27") if isinstance(table_struct, dict) else "2026-27"
 
-            long_medium_charge_idx = col_map.get("long_medium_charge", 4)
-            long_medium_unit_idx = col_map.get("long_medium_unit", 6)
-            short_term_charge_idx = col_map.get("short_term_charge", 8)
-            short_term_unit_idx = col_map.get("short_term_unit", 10)
-
+            # Parse rows
+            raw_records = []
             for r_idx in range(header_rows_count, len(table.rows)):
                 row = table.rows[r_idx]
                 if not row or all(c.strip() == "" for c in row):
@@ -181,20 +163,35 @@ class NumericMatrixParser(BaseParser):
                 if "states" in row[0].lower() or "applicable" in row[0].lower():
                     continue
 
-                # Parse year
-                year = None
-                for cell in row[1:4]:
-                    if re.match(r"\b20\d{2}-\d{2}\b", cell):
-                        year = cell.strip()
+                # Parse year index and dynamic offsets
+                y_idx = None
+                for idx, cell in enumerate(row):
+                    if re.match(r"\b20\d{2}-\d{2}\b", cell.strip()):
+                        y_idx = idx
                         break
-                if not year:
-                    year = default_year
 
-                # Parse values and units using config-driven indices
-                long_medium_charge = parse_float(row[long_medium_charge_idx], r_idx, long_medium_charge_idx) if len(row) > long_medium_charge_idx else None
-                long_medium_unit = row[long_medium_unit_idx].strip() if len(row) > long_medium_unit_idx else ""
-                short_term_charge = parse_float(row[short_term_charge_idx], r_idx, short_term_charge_idx) if len(row) > short_term_charge_idx else None
-                short_term_unit = row[short_term_unit_idx].strip() if len(row) > short_term_unit_idx else ""
+                if y_idx is None:
+                    continue
+
+                year = row[y_idx].strip()
+
+                # Collect non-empty data cells after Year cell along with their original column indices
+                data_cells = []
+                for col_idx in range(y_idx + 1, len(row)):
+                    cell = row[col_idx].strip()
+                    if cell:
+                        data_cells.append((cell, col_idx))
+                # Pad to at least 4 items
+                while len(data_cells) < 4:
+                    data_cells.append(("", y_idx + 1))
+
+                raw_lm_charge, lm_col = data_cells[0]
+                raw_lm_unit, lm_unit_col = data_cells[1]
+                raw_st_charge, st_col = data_cells[2]
+                raw_st_unit, st_unit_col = data_cells[3]
+
+                long_medium_charge = parse_float(raw_lm_charge, r_idx, lm_col)
+                short_term_charge = parse_float(raw_st_charge, r_idx, st_col)
 
                 if long_medium_charge is None and short_term_charge is None:
                     continue
@@ -204,9 +201,9 @@ class NumericMatrixParser(BaseParser):
                     "utility": utility,
                     "year": year,
                     "long_medium_charge": long_medium_charge if long_medium_charge is not None else "",
-                    "long_medium_unit": extract_unit_from_text(long_medium_unit, "Rs/MW/month") if long_medium_unit else "",
+                    "long_medium_unit": extract_unit_from_text(raw_lm_unit, "Rs/MW/month") if raw_lm_unit else "",
                     "short_term_charge": short_term_charge if short_term_charge is not None else "",
-                    "short_term_unit": extract_unit_from_text(short_term_unit, "Rs/kWh") if short_term_unit else "",
+                    "short_term_unit": extract_unit_from_text(raw_st_unit, "Rs/kWh") if raw_st_unit else "",
                 }
 
                 rec_id = generate_record_id(
@@ -227,7 +224,32 @@ class NumericMatrixParser(BaseParser):
                     confidence=1.0,
                     provenance={"row_index": r_idx},
                 )
-                records.append(record)
+                raw_records.append(record)
+
+            # De-duplicate state_level duplicate rows when a named utility record is present
+            from collections import defaultdict
+            groups = defaultdict(list)
+            for r in raw_records:
+                key = (r.fields["state"], r.fields["year"])
+                groups[key].append(r)
+
+            for key, group in groups.items():
+                has_named_utility = any(r.fields["utility"] != "state_level" for r in group)
+                if has_named_utility:
+                    for r in group:
+                        if r.fields["utility"] == "state_level":
+                            match = False
+                            for other in group:
+                                if other.fields["utility"] != "state_level":
+                                    if (other.fields["long_medium_charge"] == r.fields["long_medium_charge"] and
+                                        other.fields["short_term_charge"] == r.fields["short_term_charge"]):
+                                        match = True
+                                        break
+                            if match:
+                                continue
+                        records.append(r)
+                else:
+                    records.extend(group)
 
         # ----------------------------------------------------
         # Specialized Parser: Additional Surcharge
@@ -290,6 +312,51 @@ class NumericMatrixParser(BaseParser):
                         val_text = cell.strip()
                         break
 
+                # Check for multi-value split first (F-07)
+                split_results = []
+                matches = list(re.finditer(r"(\d+(?:\.\d+)?)\s*\(([^)]+)\)", val_text))
+                if len(matches) > 1:
+                    first_start = matches[0].start()
+                    prefix = val_text[:first_start].strip()
+                    for match in matches:
+                        v_str = match.group(1)
+                        qual = match.group(2)
+                        sub_text = f"{prefix} {v_str} ({qual})" if prefix else f"{v_str} ({qual})"
+                        sub_text = re.sub(r"\s+", " ", sub_text).strip()
+                        try:
+                            split_results.append((float(v_str), sub_text))
+                        except ValueError:
+                            pass
+
+                if split_results:
+                    for sub_val, sub_text in split_results:
+                        record_fields = {
+                            "state": state,
+                            "year": year,
+                            "additional_surcharge": sub_val,
+                            "additional_surcharge_text": sub_text,
+                            "section": current_section
+                        }
+                        rec_id = generate_record_id(
+                            table.parameter_id,
+                            state,
+                            "state_level",
+                            f"{year}:{current_section}:{sub_text}",
+                        )
+                        record = ParsedRecord(
+                            record_id=rec_id,
+                            parameter_id=table.parameter_id,
+                            fields=record_fields,
+                            source_pages=pages,
+                            source_rows=[r_idx],
+                            parser_id=self.parser_id,
+                            parser_version="1.0.0",
+                            confidence=1.0,
+                            provenance={"row_index": r_idx},
+                        )
+                        records.append(record)
+                    continue
+
                 val = parse_additional_surcharge_value(val_text)
                 
                 # Handle NA state records (TODO-03) and multi-value/period qualified text (TODO-02)
@@ -297,7 +364,7 @@ class NumericMatrixParser(BaseParser):
                     val_clean = val_text.strip().lower()
                     is_na = val_clean in ("n/a", "na", "not applicable", "not available", "--", "nil", "zero", "0")
                     if is_na and state and state != "State Level":
-                        val = 0.0 if val_clean in ("nil", "zero", "0") else ""
+                        val = 0.0 if val_clean in ("nil", "zero", "0") else "N/A"
                     else:
                         continue
 

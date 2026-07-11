@@ -137,6 +137,11 @@ class StateBlockMatrixParser(BaseParser):
             start = getattr(config.page_range, "start_page", 1)
             end = getattr(config.page_range, "end_page", start)
             pages = list(range(start, end + 1))
+        elif isinstance(config, dict) and "page_range" in config and config["page_range"]:
+            pr = config["page_range"]
+            start = pr.get("start_page", 1) if isinstance(pr, dict) else getattr(pr, "start_page", 1)
+            end = pr.get("end_page", start) if isinstance(pr, dict) else getattr(pr, "end_page", start)
+            pages = list(range(start, end + 1))
 
         # Loop through state blocks
         for b in blocks:

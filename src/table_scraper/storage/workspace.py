@@ -246,6 +246,14 @@ class Workspace:
             workspace._refresh_pdf_reference(resolved_pdf, settings.profile_id)
             return workspace
 
+        if page_count == 1:
+            try:
+                from table_scraper.adapters.pdf_reader import PdfPlumberReader
+                with PdfPlumberReader(resolved_pdf) as reader:
+                    page_count = reader.page_count
+            except Exception:
+                pass
+
         if page_count < 1:
             raise WorkspaceError("page_count must be >= 1 when creating a workspace")
 
@@ -639,6 +647,9 @@ class Workspace:
         if stage is None:
             return
 
+        # Normalize backslashes to forward slashes for cross-platform manifest paths
+        relative_path = relative_path.replace("\\", "/")
+
         with self._lock:
             stages = dict(self.manifest.stages)
             key = stage.value
@@ -659,6 +670,14 @@ class Workspace:
                     parameter_id,
                     context="register_artifact_write",
                 )
+                # Safeguard: do not register paths that belong to other parameters.
+                path_parts = relative_path.split("/")
+                if len(path_parts) > 1:
+                    for part in path_parts:
+                        if part != parameter_id and part in parameter_status:
+                            # Skip registering this path to the wrong parameter status
+                            return
+
                 entry = dict(parameter_status.get(parameter_id, {}))
                 stage_entry = entry.get(stage.value, {})
                 param_paths = list(stage_entry.get("artifact_paths", [])) if isinstance(stage_entry, dict) else []
@@ -676,9 +695,9 @@ class Workspace:
                 stages=stages,
                 parameter_status=parameter_status,
                 updated_at=_utc_now_iso(),
-                version=(self.manifest.version or 0) + 1,
             )
-            self._persist_manifest()
+            # Do NOT persist manifest to disk here to avoid write/version inflation.
+            # Manifest is persisted during stage-level complete/invalidate checkpoints.
 
     def _persist_manifest(self) -> None:
         """Atomically write ``manifest.json`` from the current in-memory manifest."""
